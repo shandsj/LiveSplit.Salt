@@ -117,7 +117,10 @@ namespace LiveSplit.Salt
 
         public IntPtr GetPlayer(int player)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                return IntPtr.Zero;
+            }
 
             // PlayerMgr.player[player]
             return (IntPtr) _players.Read<uint>(Program, 0x8 + sizeof(uint) * player);
@@ -125,7 +128,10 @@ namespace LiveSplit.Salt
 
         public MenuLevel GetMenuLevel(int player)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                return MenuLevel.PressStart;
+            }
 
             // PlayerMgr.player[player].menuMgr.curLevel
             return (MenuLevel) _players.Read<int>(Program, 0x8 + sizeof(uint) * player, 0x3C, 0x14);
@@ -133,7 +139,10 @@ namespace LiveSplit.Salt
 
         public TransitionMode GetMenuTransitionMode(int player)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                return TransitionMode.None;
+            }
 
             // PlayerMgr.player[player].menuMgr.transMode
             return (TransitionMode) _players.Read<int>(Program, 0x8 + sizeof(uint) * player, 0x3C, 0x18);
@@ -141,7 +150,10 @@ namespace LiveSplit.Salt
 
         public void UpdateInventory(int player)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                return;
+            }
 
             // 100ms cooldown between inventory updates
             if (!_playerItemTimes.TryGetValue(player, out DateTime time) || DateTime.Now > time)
@@ -188,7 +200,12 @@ namespace LiveSplit.Salt
 
         public bool TryGetPlayerItem(int player, string itemName, out InvLoot item)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                item = default;
+                return false;
+            }
+
             UpdateInventory(player);
 
             return _playerItems[player].TryGetValue(itemName, out item);
@@ -198,6 +215,10 @@ namespace LiveSplit.Salt
         {
             Random rnd = new Random();
             IntPtr player = GetPlayer(i);
+            if (player == IntPtr.Zero)
+            {
+                return;
+            }
 
             // skinIdx (Origin)
             Program.Write(player, rnd.Next(14), 0xDC);
@@ -223,10 +244,17 @@ namespace LiveSplit.Salt
 
         public string GetPlayerAnim(int player)
         {
-            CheckPlayerIndex(player);
+            if (!HasPlayerIndex(player))
+            {
+                return string.Empty;
+            }
 
             // PlayerMgr.player[0].charIdx
             int charIndex = _players.Read<int>(Program, 0x8, 0x9C);
+            if (!HasCharIndex(charIndex))
+            {
+                return string.Empty;
+            }
 
             // CharMgr.character[charIndex].anim.animName
             IntPtr animName = (IntPtr) _characters.Read<uint>(Program, 0x8 + sizeof(uint) * charIndex, 0x4, 0x8);
@@ -236,8 +264,17 @@ namespace LiveSplit.Salt
 
         public bool IsGameEnding()
         {
+            if (!HasPlayerIndex(0))
+            {
+                return false;
+            }
+
             // PlayerMgr.player[0].charIdx
             int charIndex = _players.Read<int>(Program, 0x8, 0x9C);
+            if (!HasCharIndex(charIndex))
+            {
+                return false;
+            }
 
             // CharMgr.character[charIndex].loc.Y
             float charY = _characters.Read<float>(Program, 0x8 + sizeof(uint) * charIndex, 0xD8);
@@ -258,7 +295,10 @@ namespace LiveSplit.Salt
 
         public EnemyType GetCharType(int ch)
         {
-            CheckCharIndex(ch);
+            if (!HasCharIndex(ch))
+            {
+                return EnemyType.Unknown;
+            }
 
             // CharMgr.character[ch].monsterIdx
             return (EnemyType) _characters.Read<int>(Program, 0x8 + sizeof(uint) * ch, 0x5C);
@@ -266,26 +306,23 @@ namespace LiveSplit.Salt
 
         public float GetCharHealth(int ch)
         {
-            CheckCharIndex(ch);
+            if (!HasCharIndex(ch))
+            {
+                return 0f;
+            }
 
             // CharMgr.character[ch].hp
             return _characters.Read<float>(Program, 0x8 + sizeof(uint) * ch, 0x60);
         }
 
-        private void CheckPlayerIndex(int player)
+        private bool HasPlayerIndex(int player)
         {
-            if (player < 0 || player >= GetPlayerCount())
-            {
-                throw new ArgumentOutOfRangeException(nameof(player), player, "Invalid player index");
-            }
+            return player >= 0 && player < GetPlayerCount();
         }
 
-        private void CheckCharIndex(int ch)
+        private bool HasCharIndex(int ch)
         {
-            if (ch < 0 || ch >= GetCharCount())
-            {
-                throw new ArgumentOutOfRangeException(nameof(ch), ch, "Invalid character index");
-            }
+            return ch >= 0 && ch < GetCharCount();
         }
 
         public void Dispose()
