@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LiveSplit.Salt
 {
     public class ProgramPointer
     {
+        // Only scan one process memory map at a time. Each scan reads large
+        // executable regions, so parallel scans create unnecessary memory and CPU pressure.
+        private static readonly SemaphoreSlim ScanSemaphore = new SemaphoreSlim(1, 1);
         private readonly string _signature;
         private readonly int _offset;
         private readonly int _derefCount;
@@ -32,7 +36,27 @@ namespace LiveSplit.Salt
         public T Read<T>(Process program, params int[] offsets) where T : struct
         {
             GetPointer(program);
-            return _ptr == IntPtr.Zero ? default : program.Read<T>(_ptr, offsets);
+            if (_ptr == IntPtr.Zero || program == null)
+            {
+                return default;
+            }
+
+            try
+            {
+                return program.Read<T>(_ptr, offsets);
+            }
+            catch (InvalidOperationException)
+            {
+                // The game process may exit or its Process handle may be disposed
+                // between pointer resolution and the memory read.
+                Reset();
+                return default;
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Reset();
+                return default;
+            }
         }
 
         private void GetPointer(Process program)
@@ -107,10 +131,21 @@ namespace LiveSplit.Salt
 
                     // Resolve the signature's pointer chain after the scan has
                     // completed. These are only a handful of memory reads.
-                    _ptr += _offset;
-                    for (int i = 0; i < _derefCount; i++)
+                    try
                     {
-                        _ptr = (IntPtr)program.Read<uint>(_ptr);
+                        _ptr += _offset;
+                        for (int i = 0; i < _derefCount; i++)
+                        {
+                            _ptr = (IntPtr)program.Read<uint>(_ptr);
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        Reset();
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        Reset();
                     }
 
                     return;
@@ -129,17 +164,25 @@ namespace LiveSplit.Salt
             // Never perform that work from LiveSplit's UI/update thread.
             _pointerScan = Task.Run(() =>
             {
-                using (Process scanProcess = Process.GetProcessById(processId))
+                ScanSemaphore.Wait();
+                try
                 {
-                    MemorySearcher searcher = new MemorySearcher
+                    using (Process scanProcess = Process.GetProcessById(processId))
                     {
-                        MemoryFilter = info =>
-                            (info.State & 0x1000) != 0 &&
-                            (info.Protect & 0x40) != 0 &&
-                            (info.Protect & 0x100) == 0
-                    };
+                        MemorySearcher searcher = new MemorySearcher
+                        {
+                            MemoryFilter = info =>
+                                (info.State & 0x1000) != 0 &&
+                                (info.Protect & 0x40) != 0 &&
+                                (info.Protect & 0x100) == 0
+                        };
 
-                    return searcher.FindSignature(scanProcess, _signature);
+                        return searcher.FindSignature(scanProcess, _signature);
+                    }
+                }
+                finally
+                {
+                    ScanSemaphore.Release();
                 }
             });
         }
