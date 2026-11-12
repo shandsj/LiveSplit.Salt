@@ -179,7 +179,7 @@ namespace LiveSplit.Salt
                         {
                             MemoryFilter = info =>
                                 (info.State & 0x1000) != 0 &&
-                                (info.Protect & 0x40) != 0 &&
+                                (info.Protect & 0xF0) != 0 &&
                                 (info.Protect & 0x100) == 0
                         };
 
