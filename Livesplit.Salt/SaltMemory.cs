@@ -45,6 +45,25 @@ namespace LiveSplit.Salt
             }
         }
 
+        public bool IsReady
+        {
+            get
+            {
+                if (!IsHooked)
+                {
+                    return false;
+                }
+
+                // Start all three scans without blocking LiveSplit's update thread.
+                // Until each pointer chain is resolved, callers must not read game data.
+                bool playersReady = _players.IsReady(Program);
+                bool gameStateReady = _gameState.IsReady(Program);
+                bool charactersReady = _characters.IsReady(Program);
+
+                return playersReady && gameStateReady && charactersReady;
+            }
+        }
+
         public void Hook()
         {
             if (IsHooked || DateTime.Now < _nextHookAttempt)
