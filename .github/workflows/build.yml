@@ -1,0 +1,69 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - fix/proton-ui-stalls
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Download LiveSplit build dependencies
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "LiveSplit_1.8.37.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "LiveSplit"
+
+          Invoke-WebRequest `
+            -Uri "https://github.com/LiveSplit/LiveSplit/releases/download/1.8.37/LiveSplit_1.8.37.zip" `
+            -OutFile $archive
+
+          $expectedHash = "14bc8ef8ded9ef4033fb2f0cb6a152386d393127da18a4de14f096c5347aa991"
+          $actualHash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "LiveSplit release archive SHA-256 mismatch: $actualHash"
+          }
+
+          Expand-Archive -Path $archive -DestinationPath $extract -Force
+          $coreDll = Get-ChildItem -Path $extract -Filter "LiveSplit.Core.dll" -Recurse -File | Select-Object -First 1
+          if ($null -eq $coreDll) {
+            throw "LiveSplit.Core.dll was not found in the downloaded release."
+          }
+
+          $liveSplitDir = $coreDll.Directory.FullName
+          if (!(Test-Path (Join-Path $liveSplitDir "UpdateManager.dll"))) {
+            throw "UpdateManager.dll was not found beside LiveSplit.Core.dll."
+          }
+
+          "LiveSplitDir=$liveSplitDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          msbuild .\Livesplit.Salt\LiveSplit.Salt.csproj `
+            /m `
+            /p:Configuration=Release `
+            /p:Platform=AnyCPU `
+            /p:LiveSplitDir="$env:LiveSplitDir" `
+            /verbosity:minimal
+
+          if (!(Test-Path ".\Livesplit.Salt\Components\LiveSplit.Salt.dll")) {
+            throw "The build did not produce the component DLL."
+          }
+
+      - name: Upload component DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveSplit.Salt
+          path: Livesplit.Salt/Components/LiveSplit.Salt.dll
+          if-no-files-found: error
