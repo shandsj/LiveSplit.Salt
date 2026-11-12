@@ -51,6 +51,7 @@ jobs:
         shell: pwsh
         run: |
           msbuild .\Livesplit.Salt\LiveSplit.Salt.csproj `
+            /restore `
             /m `
             /p:Configuration=Release `
             /p:Platform=AnyCPU `
