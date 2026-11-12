@@ -232,7 +232,37 @@ namespace LiveSplit.Salt
         public float PaddingBottom => 0;
         public float PaddingLeft => 0;
         public float PaddingRight => 0;
-        public IDictionary<string, Action> ContextMenuControls => null;
+        public IDictionary<string, Action> ContextMenuControls =>
+            new Dictionary<string, Action>
+            {
+                { "Copy Salt autosplitter diagnostics", CopyStartDiagnostics }
+            };
+
+        private void CopyStartDiagnostics()
+        {
+            string diagnostics = _mem.GetStartDiagnostics();
+            diagnostics += Environment.NewLine +
+                "LiveSplit current split index: " + _model.CurrentState.CurrentSplitIndex;
+
+            try
+            {
+                Clipboard.SetText(diagnostics);
+                MessageBox.Show(
+                    "Diagnostics copied to the clipboard. Paste them into the chat.",
+                    ComponentName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    diagnostics + Environment.NewLine + Environment.NewLine +
+                    "Clipboard copy failed: " + ex.Message,
+                    ComponentName,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
 #endregion
     }
 }
