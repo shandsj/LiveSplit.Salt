@@ -29,7 +29,21 @@ namespace LiveSplit.Salt
 
         public Process Program { get; private set; }
 
-        public bool IsHooked => Program != null && !Program.HasExited;
+        public bool IsHooked
+        {
+            get
+            {
+                try
+                {
+                    return Program != null && !Program.HasExited;
+                }
+                catch (InvalidOperationException)
+                {
+                    // A disposed Process handle can outlive the process it represented.
+                    return false;
+                }
+            }
+        }
 
         public void Hook()
         {
@@ -40,6 +54,14 @@ namespace LiveSplit.Salt
 
             _nextHookAttempt = DateTime.Now.AddSeconds(1);
 
+            // Retire the previous handle before looking for a replacement.
+            // The process may have exited or been disposed since the last update.
+            if (Program != null)
+            {
+                Program.Dispose();
+                Program = null;
+            }
+
             Process[] processes = Process.GetProcessesByName("salt");
             if (processes.Length == 0)
             {
@@ -47,7 +69,25 @@ namespace LiveSplit.Salt
             }
 
             Program = processes[0];
-            MemoryReader.Update64Bit(Program);
+            for (int i = 1; i < processes.Length; i++)
+            {
+                processes[i].Dispose();
+            }
+
+            try
+            {
+                MemoryReader.Update64Bit(Program);
+            }
+            catch (InvalidOperationException)
+            {
+                Program.Dispose();
+                Program = null;
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                Program.Dispose();
+                Program = null;
+            }
         }
 
         public int GetPlayerCount()
@@ -232,6 +272,7 @@ namespace LiveSplit.Salt
         public void Dispose()
         {
             Program?.Dispose();
+            Program = null;
         }
     }
 }
