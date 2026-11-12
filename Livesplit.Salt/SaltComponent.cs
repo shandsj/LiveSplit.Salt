@@ -62,18 +62,22 @@ namespace LiveSplit.Salt
         public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)
         {
             _mem.Hook();
-            if (!_mem.IsReady)
+            if (!_mem.IsHooked)
             {
                 return;
             }
 
             if (_model.CurrentState.CurrentSplitIndex == -1)
             {
-                CheckStart();
+                if (_mem.IsStartReady)
+                {
+                    CheckStart();
+                }
+
                 return;
             }
 
-            if (_mem.GetGameState() != GameState.Playing)
+            if (!_mem.IsReady || _mem.GetGameState() != GameState.Playing)
             {
                 return;
             }
