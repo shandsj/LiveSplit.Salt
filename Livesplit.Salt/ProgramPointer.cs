@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace LiveSplit.Salt
 {
@@ -13,6 +14,8 @@ namespace LiveSplit.Salt
         private int _id = -1;
 
         private DateTime _nextTry = DateTime.MinValue;
+        private Task<IntPtr> _pointerScan;
+        private int _pointerScanProcessId = -1;
 
         public ProgramPointer(string signature, int offset, int derefCount)
         {
@@ -34,49 +37,120 @@ namespace LiveSplit.Salt
 
         private void GetPointer(Process program)
         {
-            // Check for program changes to know to re-obtain pointer
             if (program == null)
             {
-                _id = -1;
-                _ptr = IntPtr.Zero;
+                Reset();
                 return;
             }
 
-            if (program.Id != _id)
+            int processId;
+            try
             {
-                _id = program.Id;
-                _ptr = IntPtr.Zero;
+                processId = program.Id;
+            }
+            catch (InvalidOperationException)
+            {
+                Reset();
+                return;
             }
 
-            // Check if pointer get should be retried
-            if (_ptr != IntPtr.Zero || DateTime.Now < _nextTry)
+            // A new game process needs a fresh pointer scan. Any scan already in
+            // progress owns a separate Process handle and can safely finish.
+            if (processId != _id)
+            {
+                _id = processId;
+                _ptr = IntPtr.Zero;
+                _pointerScan = null;
+                _pointerScanProcessId = -1;
+                _nextTry = DateTime.MinValue;
+            }
+
+            if (_ptr != IntPtr.Zero)
+            {
+                return;
+            }
+
+            if (_pointerScan != null)
+            {
+                if (_pointerScanProcessId != processId)
+                {
+                    _pointerScan = null;
+                    _pointerScanProcessId = -1;
+                }
+                else if (!_pointerScan.IsCompleted)
+                {
+                    return;
+                }
+                else
+                {
+                    Task<IntPtr> completedScan = _pointerScan;
+                    _pointerScan = null;
+                    _pointerScanProcessId = -1;
+
+                    if (completedScan.Status == TaskStatus.RanToCompletion)
+                    {
+                        _ptr = completedScan.Result;
+                    }
+                    else
+                    {
+                        // Observe failures (for example, if the game exits while
+                        // scanning) and retry after the normal scan cooldown.
+                        _ = completedScan.Exception;
+                        _nextTry = DateTime.Now.AddSeconds(1);
+                        return;
+                    }
+
+                    if (_ptr == IntPtr.Zero)
+                    {
+                        return;
+                    }
+
+                    // Resolve the signature's pointer chain after the scan has
+                    // completed. These are only a handful of memory reads.
+                    _ptr += _offset;
+                    for (int i = 0; i < _derefCount; i++)
+                    {
+                        _ptr = (IntPtr)program.Read<uint>(_ptr);
+                    }
+
+                    return;
+                }
+            }
+
+            if (DateTime.Now < _nextTry)
             {
                 return;
             }
 
             _nextTry = DateTime.Now.AddSeconds(1);
+            _pointerScanProcessId = processId;
 
-            // Find signature
-            MemorySearcher searcher = new MemorySearcher
+            // Signature scans can read large portions of the game's memory.
+            // Never perform that work from LiveSplit's UI/update thread.
+            _pointerScan = Task.Run(() =>
             {
-                MemoryFilter = info =>
-                    (info.State & 0x1000) != 0 && (info.Protect & 0x40) != 0 && (info.Protect & 0x100) == 0
-            };
+                using (Process scanProcess = Process.GetProcessById(processId))
+                {
+                    MemorySearcher searcher = new MemorySearcher
+                    {
+                        MemoryFilter = info =>
+                            (info.State & 0x1000) != 0 &&
+                            (info.Protect & 0x40) != 0 &&
+                            (info.Protect & 0x100) == 0
+                    };
 
-            _ptr = searcher.FindSignature(program, _signature);
+                    return searcher.FindSignature(scanProcess, _signature);
+                }
+            });
+        }
 
-            if (_ptr == IntPtr.Zero)
-            {
-                return;
-            }
-
-            // Add offset, dereference
-            _ptr += _offset;
-
-            for (int i = 0; i < _derefCount; i++)
-            {
-                _ptr = (IntPtr) program.Read<uint>(_ptr);
-            }
+        private void Reset()
+        {
+            _id = -1;
+            _ptr = IntPtr.Zero;
+            _pointerScan = null;
+            _pointerScanProcessId = -1;
+            _nextTry = DateTime.MinValue;
         }
     }
 }
