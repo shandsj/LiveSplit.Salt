@@ -13,6 +13,7 @@
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
+    <LiveSplitDir Condition=" '$(LiveSplitDir)' == '' ">D:\Livesplit</LiveSplitDir>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -41,7 +42,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="LiveSplit.Core">
-      <HintPath>D:\Livesplit\LiveSplit.Core.dll</HintPath>
+      <HintPath>$(LiveSplitDir)\LiveSplit.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -53,7 +54,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="UpdateManager">
-      <HintPath>D:\Livesplit\UpdateManager.dll</HintPath>
+      <HintPath>$(LiveSplitDir)\UpdateManager.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
