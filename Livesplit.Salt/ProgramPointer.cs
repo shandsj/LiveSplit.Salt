@@ -39,6 +39,35 @@ namespace LiveSplit.Salt
             return _ptr != IntPtr.Zero;
         }
 
+        public string GetDebugStatus(Process program)
+        {
+            try
+            {
+                GetPointer(program);
+
+                if (_ptr != IntPtr.Zero)
+                {
+                    return "Resolved at 0x" + _ptr.ToInt64().ToString("X");
+                }
+
+                if (_pointerScan != null)
+                {
+                    return "Scan " + _pointerScan.Status;
+                }
+
+                if (DateTime.Now < _nextTry)
+                {
+                    return "Retry cooldown";
+                }
+
+                return "Not scanning";
+            }
+            catch (Exception ex)
+            {
+                return "Error: " + ex.GetType().Name + ": " + ex.Message;
+            }
+        }
+
         public T Read<T>(Process program, params int[] offsets) where T : struct
         {
             GetPointer(program);
