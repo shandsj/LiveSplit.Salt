@@ -62,7 +62,7 @@ namespace LiveSplit.Salt
         public void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode)
         {
             _mem.Hook();
-            if (!_mem.IsHooked)
+            if (!_mem.IsReady)
             {
                 return;
             }
