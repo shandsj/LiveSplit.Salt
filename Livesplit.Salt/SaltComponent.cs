@@ -110,8 +110,14 @@ namespace LiveSplit.Salt
 
         private void CheckStart()
         {
-            if (_mem.GetMenuLevel(0) == MenuLevel.VentureForth &&
-                _mem.GetMenuTransitionMode(0) == TransitionMode.AllOut)
+            // Preserve the original menu-transition trigger, but also start when
+            // gameplay is observed. The latter is a reliable fallback for builds
+            // where the menu transition is too brief or its state differs under Proton.
+            bool menuStart =
+                _mem.GetMenuLevel(0) == MenuLevel.VentureForth &&
+                _mem.GetMenuTransitionMode(0) == TransitionMode.AllOut;
+
+            if (menuStart || _mem.GetGameState() == GameState.Playing)
             {
                 _model.Start();
             }
