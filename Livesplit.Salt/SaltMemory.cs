@@ -45,6 +45,24 @@ namespace LiveSplit.Salt
             }
         }
 
+        public bool IsStartReady
+        {
+            get
+            {
+                if (!IsHooked)
+                {
+                    return false;
+                }
+
+                // Automatic start only needs the player and game-state pointers.
+                // Do not make it wait for the character scan used by later splits.
+                bool playersReady = _players.IsReady(Program);
+                bool gameStateReady = _gameState.IsReady(Program);
+
+                return playersReady && gameStateReady;
+            }
+        }
+
         public bool IsReady
         {
             get
@@ -55,7 +73,7 @@ namespace LiveSplit.Salt
                 }
 
                 // Start all three scans without blocking LiveSplit's update thread.
-                // Until each pointer chain is resolved, callers must not read game data.
+                // Character data is required for boss and ending split detection.
                 bool playersReady = _players.IsReady(Program);
                 bool gameStateReady = _gameState.IsReady(Program);
                 bool charactersReady = _characters.IsReady(Program);
