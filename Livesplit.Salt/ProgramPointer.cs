@@ -185,6 +185,11 @@ namespace LiveSplit.Salt
                     ScanSemaphore.Release();
                 }
             });
+            _pointerScan.ContinueWith(
+                failedScan => { _ = failedScan.Exception; },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
         }
 
         private void Reset()
