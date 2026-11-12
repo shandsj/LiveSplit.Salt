@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text;
 
 namespace LiveSplit.Salt
 {
@@ -341,6 +342,73 @@ namespace LiveSplit.Salt
         private bool HasCharIndex(int ch)
         {
             return ch >= 0 && ch < GetCharCount();
+        }
+
+        public string GetStartDiagnostics()
+        {
+            StringBuilder output = new StringBuilder();
+
+            output.AppendLine("Salt & Sanctuary autosplitter diagnostics");
+            output.AppendLine("Timestamp: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+            output.AppendLine("Process hooked: " + IsHooked);
+
+            if (!IsHooked)
+            {
+                output.AppendLine("Process: not attached");
+                return output.ToString();
+            }
+
+            try
+            {
+                output.AppendLine("Process name: " + Program.ProcessName);
+                output.AppendLine("Process ID: " + Program.Id);
+                output.AppendLine("64-bit process: " + MemoryReader.is64Bit);
+            }
+            catch (Exception ex)
+            {
+                output.AppendLine("Process details error: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            output.AppendLine("Player pointer: " + _players.GetDebugStatus(Program));
+            output.AppendLine("Game-state pointer: " + _gameState.GetDebugStatus(Program));
+            output.AppendLine("Character pointer: " + _characters.GetDebugStatus(Program));
+
+            try
+            {
+                bool playersReady = _players.IsReady(Program);
+                bool gameStateReady = _gameState.IsReady(Program);
+                output.AppendLine("Start pointers ready: " + (playersReady && gameStateReady));
+
+                if (playersReady)
+                {
+                    int playerCount = _players.Read<int>(Program, 0x4);
+                    output.AppendLine("Raw player count: " + playerCount);
+
+                    if (playerCount > 0 && playerCount < 16)
+                    {
+                        int menuLevel = _players.Read<int>(Program, 0x8, 0x3C, 0x14);
+                        int transitionMode = _players.Read<int>(Program, 0x8, 0x3C, 0x18);
+
+                        output.AppendLine("Raw menu level: " + menuLevel);
+                        output.AppendLine("Menu level enum: " + ((MenuLevel)menuLevel));
+                        output.AppendLine("Raw transition mode: " + transitionMode);
+                        output.AppendLine("Transition enum: " + ((TransitionMode)transitionMode));
+                    }
+                }
+
+                if (gameStateReady)
+                {
+                    int gameState = _gameState.Read<int>(Program, 0x0);
+                    output.AppendLine("Raw game state: " + gameState);
+                    output.AppendLine("Game state enum: " + ((GameState)gameState));
+                }
+            }
+            catch (Exception ex)
+            {
+                output.AppendLine("Memory read error: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            return output.ToString();
         }
 
         public void Dispose()
