@@ -33,6 +33,12 @@ namespace LiveSplit.Salt
             _derefCount = derefCount;
         }
 
+        public bool IsReady(Process program)
+        {
+            GetPointer(program);
+            return _ptr != IntPtr.Zero;
+        }
+
         public T Read<T>(Process program, params int[] offsets) where T : struct
         {
             GetPointer(program);
